@@ -52,6 +52,7 @@ class SocketGroupCmd {
         */
 
         virtual void exec(Socket* socket, SocketGroup* group, void* reference)=0;
+    	virtual ~SocketGroupCmd();
 };
 
 
