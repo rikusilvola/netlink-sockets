@@ -118,7 +118,7 @@ inline unsigned Socket::listenQueue() const {
 * @return socket blocking status
 */
 
-inline bool Socket::blocking() const {
+inline bool Socket::isBlocking() const {
 
     return _blocking;
 }
@@ -135,5 +135,3 @@ inline int Socket::socketHandler() const {
 
     return _socketHandler;
 }
-
-

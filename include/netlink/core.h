@@ -39,7 +39,9 @@
 
 #if defined(_WIN32) || defined(__WIN32__) || defined(_MSC_VER)
 
-    #define OS_WIN32
+	#ifndef OS_WIN32
+    	#define OS_WIN32
+	#endif
     //#define _WIN32_WINNT 0x0600
 
 
@@ -54,7 +56,9 @@
 
 #else
 
-    #define OS_LINUX
+	#ifndef OS_LINUX
+    	#define OS_LINUX
+	#endif
 
     #include <arpa/inet.h>
     #include <sys/fcntl.h>

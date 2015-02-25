@@ -18,12 +18,14 @@
     along with NetLink Sockets. If not, see <http://www.gnu.org/licenses/>.
 
 */
-
+#include <iostream>
+using namespace std;
 
 #include "netlink/socket.h"
-
 #include <string.h>
 #include <stdio.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
 
 
 NL_NAMESPACE
@@ -118,10 +120,12 @@ static void checkReadError(const string& functionName) {
 }
 
 
-void Socket::initSocket() {
+void Socket::initSocket(bool blocking, int nonBlockingConnextionTimeout) {
 
     struct addrinfo conf, *res = NULL;
     memset(&conf, 0, sizeof(conf));
+
+    _inBufferUsed = 0;
 
     if(_type == SERVER || _protocol == UDP)
         conf.ai_flags = AI_PASSIVE;
@@ -159,7 +163,6 @@ void Socket::initSocket() {
             throw Exception(Exception::BAD_IP_VER, "Socket::initSocket: bad ip version parameter");
     }
 
-
     char portStr[10];
 
     const char* host;
@@ -189,13 +192,10 @@ void Socket::initSocket() {
 		#ifndef _MSC_VER
 			errorMsg += gai_strerror(status);
 		#endif
-
         throw Exception(Exception::ERROR_SET_ADDR_INFO, errorMsg, getSocketErrorCode());
     }
 
-    bool connected = false;
-
-    while(!connected && res) {
+    while(!_connected && res) {
 
         _socketHandler = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
 
@@ -209,14 +209,65 @@ void Socket::initSocket() {
                         if (bind(_socketHandler, res->ai_addr, res->ai_addrlen) == -1)
                             close(_socketHandler);
                         else
-                            connected = true;
+                        	_connected = true;
                     }
                     else {
-                        status = connect(_socketHandler, res->ai_addr, res->ai_addrlen);
+
+                    	if(blocking){
+
+                    		status = connect(_socketHandler, res->ai_addr, res->ai_addrlen);
+                    	}
+                    	else{
+
+                    		setBlocking(false);
+
+							status = connect(_socketHandler, res->ai_addr, res->ai_addrlen);
+							if(status < 0 && errno == EINPROGRESS){
+								fd_set myset;
+								struct timeval tv;
+								socklen_t lon;
+								int valopt;
+								int res;
+								do{
+									tv.tv_sec = nonBlockingConnextionTimeout;
+									tv.tv_usec = 0;
+									FD_ZERO(&myset);
+									FD_SET(_socketHandler, &myset);
+									res = select(_socketHandler+1, NULL, &myset, NULL, &tv);
+
+									if(res < 0 && errno != EINTR){
+										//Error connecting
+										status = -1;
+										break;
+									}
+									else if(res > 0){
+										lon = sizeof(int);
+										if(getsockopt(_socketHandler, SOL_SOCKET, SO_ERROR, (void*)(&valopt), &lon)<0){
+											//Error in getsockopt
+											status = -1;
+											break;
+										}
+										if(valopt){
+											//Error in delayed connection
+											status = -1;
+											break;
+										}
+										//Connection OK
+										status = 0;
+										break;
+									}
+									else{
+										//Timeout in select
+										status = -1;
+										break;
+									}
+								}while(1);
+							}
+                    	}
                         if(status != -1)
-                            connected = true;
+                        	_connected = true;
                         else
-                            close(_socketHandler);
+                           close(_socketHandler);
                     }
 
                     break;
@@ -234,7 +285,7 @@ void Socket::initSocket() {
                     if (bind(_socketHandler, res->ai_addr, res->ai_addrlen) == -1)
                         close(_socketHandler);
                     else
-                        connected = true;
+                    	_connected = true;
 
                     if (_protocol == TCP && listen(_socketHandler, _listenQueue) == -1)
                         throw Exception(Exception::ERROR_CAN_NOT_LISTEN, "Socket::initSocket: could not start listening", getSocketErrorCode());
@@ -243,7 +294,7 @@ void Socket::initSocket() {
 
             }
 
-    if(connected && _ipVer == ANY)
+    if(_connected && _ipVer == ANY)
         switch(res->ai_family) {
             case AF_INET:
                 _ipVer = IP4;
@@ -258,7 +309,7 @@ void Socket::initSocket() {
 
     }
 
-    if(!connected)
+    if(!_connected)
         throw Exception(Exception::ERROR_CONNECT_SOCKET, "Socket::initSocket: error in socket connection/bind", getSocketErrorCode());
 
 
@@ -281,14 +332,27 @@ void Socket::initSocket() {
 * @throw Exception BAD_PROTOCOL, BAD_IP_VER, ERROR_SET_ADDR_INFO*, ERROR_CONNECT_SOCKET*,
 *  ERROR_GET_ADDR_INFO*
 */
-
-
 Socket::Socket(const string& hostTo, unsigned portTo, Protocol protocol, IPVer ipVer) :
                 _hostTo(hostTo), _portTo(portTo), _portFrom(0), _protocol(protocol),
-                _ipVer(ipVer), _type(CLIENT), _blocking(true), _listenQueue(0)
+                _ipVer(ipVer), _type(CLIENT), _blocking(true), _listenQueue(0), _connected(false)
 {
     initSocket();
 }
+
+/**
+* CLIENT Socket constructor
+*
+* Creates a socket
+* The local port of the socket is choosen by OS.
+* @param protocol the protocol to be used (TCP or UDP)
+* @param ipVer the IP version to be used (IP4, IP6 or ANY)
+*/
+Socket::Socket(Protocol protocol, IPVer ipVer, SocketType sockType) :
+                _hostTo(""), _portTo(0), _portFrom(0), _protocol(protocol),
+                _ipVer(ipVer), _type(sockType), _blocking(true), _listenQueue(0),
+                _connected(false), _socketHandler(-1), _inBufferUsed(0)
+{}
+
 
 
 /**
@@ -304,10 +368,9 @@ Socket::Socket(const string& hostTo, unsigned portTo, Protocol protocol, IPVer i
 * @throw Exception BAD_PROTOCOL, BAD_IP_VER, ERROR_SET_ADDR_INFO*, ERROR_SET_SOCK_OPT*,
 *  ERROR_CAN_NOT_LISTEN*, ERROR_CONNECT_SOCKET*
 */
-
 Socket::Socket(unsigned portFrom, Protocol protocol, IPVer ipVer, const string& hostFrom, unsigned listenQueue):
                 _hostFrom(hostFrom), _portTo(0), _portFrom(portFrom), _protocol(protocol),
-                _ipVer(ipVer), _type(SERVER), _blocking(true), _listenQueue(listenQueue)
+                _ipVer(ipVer), _type(SERVER), _blocking(true), _listenQueue(listenQueue), _connected(false)
 {
     initSocket();
 }
@@ -325,10 +388,9 @@ Socket::Socket(unsigned portFrom, Protocol protocol, IPVer ipVer, const string& 
 * @throw Exception BAD_PROTOCOL, BAD_IP_VER, ERROR_SET_ADDR_INFO*, ERROR_SET_SOCK_OPT*,
 *  ERROR_CAN_NOT_LISTEN*, ERROR_CONNECT_SOCKET*
 */
-
 Socket::Socket(const string& hostTo, unsigned portTo, unsigned portFrom, IPVer ipVer):
                 _hostTo(hostTo), _portTo(portTo), _portFrom(portFrom), _protocol(UDP),
-                _ipVer(ipVer), _type(CLIENT), _blocking(true), _listenQueue(0)
+                _ipVer(ipVer), _type(CLIENT), _blocking(true), _listenQueue(0), _connected(false)
 {
 
     initSocket();
@@ -345,15 +407,13 @@ Socket::Socket() : _blocking(true), _socketHandler(-1) {};
 */
 
 Socket::~Socket() {
-
     if(_socketHandler != -1)
         close(_socketHandler);
-
 }
 
 
 // get sockaddr, IPv4 or IPv6:
-// This function is from Brian “Beej Jorgensen” Hall: Beej's Guide to Network Programming.
+// This function is from Brian Beej Jorgensen Hall: Beej's Guide to Network Programming.
 static void *get_in_addr(struct sockaddr *sa)
 {
     if (sa->sa_family == AF_INET) {
@@ -374,7 +434,6 @@ static void *get_in_addr(struct sockaddr *sa)
 * @return A CLIENT socket that handles the new connection
 * @throw Exception EXPECTED_TCP_SOCKET, EXPECTED_SERVER_SOCKET
 */
-
 Socket* Socket::accept() {
 
     if(_protocol != TCP)
@@ -410,7 +469,7 @@ Socket* Socket::accept() {
     acceptSocket->_ipVer = _ipVer;
     acceptSocket->_type = CLIENT;
     acceptSocket->_listenQueue = 0;
-    acceptSocket->blocking(_blocking);
+    acceptSocket->setBlocking(_blocking);
 
     return acceptSocket;
 }
@@ -429,8 +488,6 @@ Socket* Socket::accept() {
 * @param portTo Target/remote port
 * @throw Exception EXPECTED_UDP_SOCKET, BAD_IP_VER, ERROR_SET_ADDR_INFO*, ERROR_SEND*
 */
-
-
 void Socket::sendTo(const void* buffer, size_t size, const string& hostTo, unsigned portTo) {
 
     if(_protocol != UDP)
@@ -502,8 +559,6 @@ void Socket::sendTo(const void* buffer, size_t size, const string& hostTo, unsig
 * @return the length of the data recieved
 * @throw Exception EXPECTED_UDP_SOCKET, ERROR_READ*
 */
-
-
 int Socket::readFrom(void* buffer, size_t bufferSize, string* hostFrom, unsigned* portFrom) {
 
     if(_protocol != UDP)
@@ -546,29 +601,37 @@ int Socket::readFrom(void* buffer, size_t bufferSize, string* hostFrom, unsigned
 * @pre Socket must be CLIENT
 * @param buffer A pointer to the data we want to send
 * @param size Length of the data to be sent (bytes)
-* @throw Exception EXPECTED_CLIENT_SOCKET, ERROR_SEND*
 */
+int Socket::send(const void* buffer, size_t size) {
+	int status;
+	size_t sentData = 0;
+	try{
+			if(_type != CLIENT)
+				return -1;
+				//throw Exception(Exception::EXPECTED_CLIENT_SOCKET, "Socket::send: Expected client socket (socket with host and port target)");
 
+			if(_protocol == UDP)
+			{
+				sendTo(buffer, size, _hostTo, _portTo);
+				return (int) size;
+			}
 
-void Socket::send(const void* buffer, size_t size) {
+			while (sentData < size) {
 
-    if(_type != CLIENT)
-        throw Exception(Exception::EXPECTED_CLIENT_SOCKET, "Socket::send: Expected client socket (socket with host and port target)");
+				status = ::send(_socketHandler, (const char*)buffer + sentData, size - sentData, 0);
 
-    if(_protocol == UDP)
-        return sendTo(buffer, size, _hostTo, _portTo);
-
-    size_t sentData = 0;
-
-    while (sentData < size) {
-
-        int status = ::send(_socketHandler, (const char*)buffer + sentData, size - sentData, 0);
-
-        if(status == -1)
-            throw Exception(Exception::ERROR_SEND, "Error sending data", getSocketErrorCode());
-
-        sentData += status;
-    }
+				if(status == -1)
+				{
+					_connected = false;
+					return status;
+					//throw Exception(Exception::ERROR_SEND, "Error sending data", getSocketErrorCode());
+				}
+				sentData += status;
+			}
+		}catch(Exception e){
+	    	return -1;
+	    }
+    return sentData;
 }
 
 /**
@@ -579,20 +642,19 @@ void Socket::send(const void* buffer, size_t size) {
 * @param buffer A pointer to a buffer where received data will be stored
 * @param bufferSize Size of the buffer
 * @return Size of received data or (-1) if Socket is non-blocking and there's no data received.
-* @throw Exception ERROR_READ*
 */
-
-
 int Socket::read(void* buffer, size_t bufferSize) {
 
-    int status = recv(_socketHandler, (char*)buffer, bufferSize, 0);
-
-    if(status == -1)
-        checkReadError("read");
-
+    int status ;
+    try{
+    	status = recv(_socketHandler, (char*)buffer, bufferSize, 0);
+		if(status == -1)
+			checkReadError("read");
+    }catch(Exception e){
+    	return -1;
+    }
     return status;
 }
-
 
 /**
 * Get next read() data size
@@ -600,10 +662,7 @@ int Socket::read(void* buffer, size_t bufferSize) {
 * Get the size of the data (bytes) a call to read() or readFrom() can process
 *
 * @return size of data the next call to read/readFrom will receive
-* @throw Exception ERROR_IOCTL*
 */
-
-
 int Socket::nextReadSize() const {
 
 	#ifdef OS_WIN32
@@ -614,14 +673,19 @@ int Socket::nextReadSize() const {
 
     int status;
 
-    #ifdef OS_WIN32
-        status = ioctlsocket(_socketHandler, FIONREAD, &result);
-    #else
-        status = ioctl(_socketHandler, FIONREAD, &result);
-    #endif
+    try{
+		#ifdef OS_WIN32
+			status = ioctlsocket(_socketHandler, FIONREAD, &result);
+		#else
+			status = ioctl(_socketHandler, FIONREAD, &result);
+		#endif
+    }catch(Exception e){
+    	return -1;
+    }
 
     if(status)
-        throw Exception(Exception::ERROR_IOCTL, "Socket::nextReadSize: error ioctl", getSocketErrorCode());
+    	return -1;
+        //throw Exception(Exception::ERROR_IOCTL, "Socket::nextReadSize: error ioctl", getSocketErrorCode());
 
     return result;
 }
@@ -633,10 +697,8 @@ int Socket::nextReadSize() const {
 * Sets the Socket as blocking (if blocking is true) or as non-blocking (otherwise)
 *
 * @param blocking true to set the Socket as blocking; false to set the Socket as non-blocking
-* @throw Exception ERROR_IOCTL*
 */
-
-void Socket::blocking(bool blocking) {
+void Socket::setBlocking(bool blocking) {
 
     _blocking = blocking;
 
@@ -662,21 +724,262 @@ void Socket::blocking(bool blocking) {
         throw Exception(Exception::ERROR_IOCTL, "Socket::blocking: ioctl error", getSocketErrorCode());
 }
 
+/**
+* Connect the socket using address and port
+* @param hostTo Target/remote host
+* @param portTo Target/remote port
+* @param blocking Blocking or not blocking mode
+*/
+void Socket::connectTo(const string& hostTo, unsigned portTo, bool blocking, int nonBlockingConnextionTimeout) {
+	_hostTo = hostTo;
+	_portTo = portTo;
+	_connected = false;
+	initSocket(blocking, nonBlockingConnextionTimeout);
+}
+
+/**
+* Listen to socket using address and port
+* @param hostFrom Target/remote host
+* @param portFrom Target/remote port
+* @param blocking Blocking or not blocking mode
+*/
+void Socket::listenTo(const string& hostFrom, unsigned portFrom, bool blocking, int nonBlockingConnextionTimeout) {
+	_hostFrom = hostFrom;
+	_portFrom = portFrom;
+	_connected = false;
+	initSocket(blocking, nonBlockingConnextionTimeout);
+}
+
+/**
+* Listen to socket using port
+* @param portFrom Target/remote port
+* @param blocking Blocking or not blocking mode
+*/
+void Socket::listenTo(unsigned portFrom, bool blocking, int nonBlockingConnextionTimeout) {
+	_hostFrom = "";
+	_portFrom = portFrom;
+	_connected = false;
+	initSocket(blocking, nonBlockingConnextionTimeout);
+}
+
+/**
+* Reconnect the socket
+*/
+void Socket::reconnect() {
+	_connected = false;
+	initSocket();
+}
+
+
 
 /**
 * Closes (disconnects) the socket. After this call the socket can not be used.
 *
 * @warning Any use of the Socket after disconnection leads to undefined behaviour.
 */
-
-
 void Socket::disconnect() {
 
     close(_socketHandler);
-
     _socketHandler = -1;
+    _inBufferUsed = 0;
+    _connected = false;
 
 }
+
+/**
+* Returns whether the socket is connected
+*
+* @return socket connected status
+*/
+bool Socket::isConnected(){
+    return _connected;
+}
+
+/**
+* Read the socket and put what it contains in a local buffer
+* /param timeout for reading udp socket in milliseconds
+* @return number of bytes read
+*/
+int Socket::recvBuffer(int nonBlockingSelectTimeout)
+{
+	ssize_t rv = 0;
+	size_t buffRemain = sizeof(_inBuffer) - _inBufferUsed;
+	if(buffRemain == 0)
+		return -1;
+
+    if(_protocol == UDP) {
+    	fd_set myset;
+    	struct timeval tv;
+    	int res = 0;
+    	tv.tv_sec = (int)(nonBlockingSelectTimeout / 1000);
+    	tv.tv_usec = (nonBlockingSelectTimeout % 1000) * 1000;
+    	FD_ZERO(&myset);
+    	FD_SET(_socketHandler, &myset);
+    	res = select(_socketHandler+1, &myset, NULL, NULL, &tv);
+    	if (res > 0) {
+    		rv = recv(_socketHandler, (void*)&_inBuffer[_inBufferUsed], buffRemain, MSG_DONTWAIT);
+    	}
+    }
+    else {
+    	rv = recv(_socketHandler, (void*)&_inBuffer[_inBufferUsed], buffRemain, MSG_DONTWAIT);
+    }
+
+	if(rv == 0 || (rv < 0 && errno == EAGAIN))
+		return 0;
+	else if(rv < 0)
+		return -2;
+
+	_inBufferUsed += rv;
+
+	return rv;
+}
+
+/**
+* Read the local input buffer
+*
+* @param buf buffer to fill
+*/
+void Socket::getInBuffer(char *buf)
+{
+	memcpy(buf, _inBuffer, _inBufferUsed);
+}
+
+/**
+* Read the local input buffer until the last separator character
+*
+* @param buf buffer to fill
+* @param sep separator character
+* @return number of bytes read, -1 if error
+*/
+int Socket::readBufferUntil(char *buf, int len, char sep)
+{
+	char *lineEnd;
+	int ret;
+
+	lineEnd = (char*) memchr((void*)_inBuffer, sep, _inBufferUsed);
+	if(lineEnd == NULL){
+		return 0;
+	}else{
+		lineEnd++;
+		if((lineEnd - _inBuffer) <= len){
+			memcpy(buf, _inBuffer, lineEnd - _inBuffer);
+			ret = lineEnd - _inBuffer;
+		}else{
+			ret = -1; //Not enough space in the buffer
+		}
+	}
+
+	// Shift buffer down so the unprocessed data is at the start
+	_inBufferUsed -= (lineEnd -_inBuffer);
+	memmove(_inBuffer, lineEnd, _inBufferUsed);
+
+	return ret;
+}
+
+/**
+* Read the local input buffer but don't move
+* Should be used with moveBufferForward
+*
+* @param buf buffer to fill
+* @param len buffer size
+* @param offset _inBuffer offset to read from
+* @return number of bytes read, -1 if error
+*/
+int Socket::readBufferAt(char *buf, unsigned int len, unsigned int offset)
+{
+	unsigned int lineEnd = len;
+	if (buf != NULL && len > 0) {
+		if (_inBufferUsed < len+offset) {
+			lineEnd = _inBufferUsed;
+		}
+		memcpy(buf, _inBuffer+offset, lineEnd);
+	}
+	else {
+		lineEnd = -1;
+	}
+	return lineEnd;
+}
+
+/**
+* Move the local input buffer forward
+*
+* @param lineEnd bytes to move
+* @return number of bytes moved, -1 if error
+*/
+int Socket::moveBufferForward(unsigned int lineEnd) {
+	if (lineEnd <= _inBufferUsed) {
+		_inBufferUsed -= lineEnd;
+		memmove(_inBuffer, _inBuffer+lineEnd, _inBufferUsed);
+		return lineEnd;
+	}
+	else {
+		return -1;
+	}
+}
+
+/**
+* Get the TCP info of the socket
+*
+* @param tcpInfo tcp info struct to fill
+* @return 0 if ok, -1 in case of error
+*/
+int Socket::getTcpInfo(tcp_info *tcpInfo)
+{
+	socklen_t tcp_info_length = sizeof(struct tcp_info);
+	if (getsockopt(_socketHandler, SOL_TCP, TCP_INFO, (void *)tcpInfo, &tcp_info_length ) == 0 ) {
+		return 0;
+	}else{
+		return -1;
+	}
+	/*
+	printf("tcpi_last_data_sent: %u\ntcpi_last_data_recv:%u\ntcpi_snd_ssthresh:%u\ntcpi_rcv_ssthresh:%u\ntcpi_rtt:%u\ntcpi_rttvar:%u\ntcpi_lost:%u\ntcpi_retrans:%u\ntcpi_retransmits:%u\ntcpi_total_retrans:%u\ntcpi_unacked:%u\ntcpi_state:%u",
+		tcpInfo.tcpi_last_data_sent,
+		tcpInfo.tcpi_last_data_recv,
+		tcpInfo.tcpi_snd_ssthresh,
+		tcpInfo.tcpi_rcv_ssthresh,
+		tcpInfo.tcpi_rtt,
+		tcpInfo.tcpi_rttvar,
+		tcpInfo.tcpi_lost,
+		tcpInfo.tcpi_retrans,
+		tcpInfo.tcpi_retransmits,
+		tcpInfo.tcpi_total_retrans,
+		tcpInfo.tcpi_unacked,
+		tcpInfo.tcpi_state
+	);
+	*/
+}
+
+/**
+* Get the TCP info lost byte
+*
+* @return tcpi_lost if ok, -1 in case of error
+*/
+int Socket::getTcpPckLost()
+{
+	tcp_info tcpInfo;
+	socklen_t tcp_info_length = sizeof(tcp_info);
+	if (getsockopt(_socketHandler, SOL_TCP, TCP_INFO, (void *)&tcpInfo, &tcp_info_length ) == 0 ) {
+		return tcpInfo.tcpi_lost;
+	}else{
+		return -1;
+	}
+}
+
+/**
+ * Get the TCP info retrans byte
+ *
+ * @return tcpi_lost if ok, -1 in case of error
+ */
+ int Socket::getTcpPckRetrans()
+ {
+ 	tcp_info tcpInfo;
+ 	socklen_t tcp_info_length = sizeof(tcp_info);
+ 	if (getsockopt(_socketHandler, SOL_TCP, TCP_INFO, (void *)&tcpInfo, &tcp_info_length ) == 0 ) {
+ 		return tcpInfo.tcpi_retrans;
+ 	}else{
+ 		return -1;
+ 	}
+ }
 
 /**
 * @include socket.inline.h

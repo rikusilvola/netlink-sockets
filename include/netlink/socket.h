@@ -24,6 +24,9 @@
 
 #include "netlink/core.h"
 
+#define BUFFER_SIZE 4096
+
+typedef struct tcp_info tcp_info;
 
 NL_NAMESPACE
 
@@ -39,7 +42,6 @@ NL_NAMESPACE
 class Socket {
 
     private:
-
         string      _hostTo;
         string      _hostFrom;
         unsigned    _portTo;
@@ -49,11 +51,15 @@ class Socket {
         SocketType  _type;
         bool        _blocking;
         unsigned    _listenQueue;
-
+        bool      	_connected;
         int         _socketHandler;
+        char        _inBuffer[BUFFER_SIZE];
+        size_t      _inBufferUsed;
 
 
     public:
+
+        Socket(Protocol protocol, IPVer ipVer, SocketType sockType = CLIENT);
 
         Socket(const string& hostTo, unsigned portTo, Protocol protocol = TCP, IPVer ipVer = ANY);
 
@@ -67,7 +73,7 @@ class Socket {
         Socket* accept();
 
         int read(void* buffer, size_t bufferSize);
-        void send(const void* buffer, size_t size);
+        int send(const void* buffer, size_t size);
 
         int readFrom(void* buffer, size_t bufferSize, string* HostFrom, unsigned* portFrom = NULL);
         void sendTo(const void* buffer, size_t size, const string& hostTo, unsigned portTo);
@@ -76,6 +82,11 @@ class Socket {
 
         void disconnect();
 
+        void reconnect();
+        void connectTo(const string& hostTo, unsigned portTo, bool blocking = true, int nonBlockingConnextionTimeout = 10);
+        void listenTo(const string& hostFrom, unsigned portFrom, bool blocking = true, int nonBlockingConnextionTimeout = 10);
+        void listenTo(unsigned portFrom, bool blocking = true, int nonBlockingConnextionTimeout = 10);
+
         const string&   hostTo() const;
         const string&   hostFrom() const;
         unsigned        portTo() const;
@@ -83,17 +94,25 @@ class Socket {
         Protocol        protocol() const;
         IPVer           ipVer() const;
         SocketType      type() const;
-        bool            blocking() const;
         unsigned        listenQueue() const;
         int             socketHandler() const;
+        bool            isBlocking() const;
 
-
-        void blocking(bool blocking);
+        void 			setBlocking(bool blocking);
+        bool            isConnected() ;
+        void 			getInBuffer(char *buf);
+        int 			moveBufferForward(unsigned int lineEnd);
+        int 			recvBuffer(int nonBlockingSelectTimeout = 200);
+        int 			readBufferUntil(char *buf, int len, char sep);
+        int				readBufferAt(char *buf, unsigned int len, unsigned int offset);
+        int 			getTcpInfo(tcp_info *tcpInfo);
+        int 			getTcpPckLost();
+        int 			getTcpPckRetrans();
 
 
     private:
 
-        void initSocket();
+        void initSocket(bool blocking = true, int nonBlockingConnextionTimeout = 10);
         Socket();
 
 };

@@ -36,7 +36,7 @@ unsigned NL_NAMESPACE_NAME::getTime() {
 
         struct timeval now;
         gettimeofday(&now, NULL);
-        unsigned milisec = now.tv_sec * 1000 + now.tv_usec / 1000.0;
+        unsigned milisec = (unsigned) (now.tv_sec * 1000 + now.tv_usec / 1000.0);
         return(milisec);
 
     #endif
