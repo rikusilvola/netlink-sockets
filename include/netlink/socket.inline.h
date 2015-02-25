@@ -21,7 +21,7 @@
 
 #ifdef DOXYGEN
     #include <netlink/socket.h>
-    NL_NAMESPACE_USE
+    NL_NAMESPACE
 #endif
 
 /**
@@ -135,5 +135,9 @@ inline int Socket::socketHandler() const {
 
     return _socketHandler;
 }
+
+#ifdef DOXYGEN
+    NL_NAMESPACE_END
+#endif
 
 

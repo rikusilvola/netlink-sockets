@@ -22,7 +22,7 @@
 
 #ifdef DOXYGEN
     #include <netlink/smart_buffer.h>
-    NL_NAMESPACE_USE
+    NL_NAMESPACE
 #endif
 
 
@@ -87,4 +87,8 @@ inline void SmartBuffer::clear() {
 
     _usedSize = 0;
 }
+
+#ifdef DOXYGEN
+    NL_NAMESPACE_END
+#endif
 

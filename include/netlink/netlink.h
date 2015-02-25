@@ -1,6 +1,6 @@
 /*
     NetLink Sockets: Networking C++ library
-    Copyright 2012 Pedro Francisco Pareja Ruiz (PedroPareja@Gmail.com)
+    Copyright 2012-2014 Pedro Francisco Pareja Ruiz (PedroPareja@Gmail.com)
 
     This file is part of NetLink Sockets.
 
@@ -53,7 +53,7 @@
 /**
 * @mainpage NetLink Sockets C++ Library
 * @author Pedro Fco. Pareja Ruiz ( PedroPareja [at] Gmail.com )
-* @version 1.0.0-pre-3
+* @version 1.0.0-pre-6
 *
 * This is a C++ socket library designed to enable easy and fast development of socket related functionality.
 *
@@ -66,13 +66,33 @@
 *
 * Download the latest version of the library at http://sourceforge.net/projects/netlinksockets/
 *
-* @section CHANGELOG
+*
+* @par Linking:
+*
+* @li Linux and OSX: no need to link anything.
+* @li Windows: Link against WS2_32.lib (system lib) in Visual C++ or libws2_32.a in MingW.
+*
+* @n
+* @par CHANGELOG
+* <HR>
+*
+* 1.0.0-pre-6
+* @li Fixed: getTime() return type changed to unsigned long long
+*
+* 1.0.0-pre-5
+* @li Compilers: now \b MinGW compatible.
+* @li Added copy constructor and copy operator to SmartBuffer class.
+* @li Fixed: (remotely) possible memory leaks in NL::Socket::accept and NL::SmartBuffer::read
+*
+* 1.0.0-pre-4
+* @li Fixed: memory leak in NL::Socket::initSocket(): some blocks of addrinfo were not completely freed
+*
 * 1.0.0-pre-3
 * @li Fixed example: NL::init() was missing in udpDirectChat.cc
 * @li Added sourceForge logo to documentation
 *
 * 1.0.0-pre-2
-* @li Added SmartBuffer Class
+* @li Added SmartBuffer class
 * @li Added webGet.cc example
 * @li Documentation improvements
 *

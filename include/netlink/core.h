@@ -40,7 +40,7 @@
 #if defined(_WIN32) || defined(__WIN32__) || defined(_MSC_VER)
 
     #define OS_WIN32
-    //#define _WIN32_WINNT 0x0600
+    #define _WIN32_WINNT 0x501
 
 
     #include <winsock2.h>
@@ -68,6 +68,7 @@
 
 #endif
 
+
 #include <string>
 
 
@@ -87,8 +88,8 @@ void init();
 
 enum Protocol {
 
-    TCP,
-    UDP
+    TCP,	/**< TCP Protocol*/
+    UDP		/**< UDP Protocol*/
 };
 
 
@@ -100,9 +101,9 @@ enum Protocol {
 
 enum IPVer {
 
-    IP4,
-    IP6,
-    ANY
+    IP4,	/**< IP version 4*/
+    IP6,	/**< IP version 6*/
+    ANY		/**< Any IP version*/
 };
 
 

@@ -73,7 +73,7 @@ void SocketGroup::remove(Socket* socket) {
 
 bool SocketGroup::listen(unsigned milisec, void* reference) {
 
-    unsigned finTime = getTime() + milisec;
+    unsigned long long finTime = getTime() + milisec;
     bool executedOnce = false;
     bool result = false;
 
@@ -91,7 +91,7 @@ bool SocketGroup::listen(unsigned milisec, void* reference) {
             maxHandle = iMax(maxHandle, _vSocket[i]->socketHandler());
         }
 
-        unsigned milisecLeft = finTime - getTime();
+        unsigned long long milisecLeft = finTime - getTime();
         struct timeval timeout;
 
         timeout.tv_sec = milisecLeft / 1000;

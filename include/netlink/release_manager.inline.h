@@ -36,6 +36,17 @@ ReleaseManager<T>::~ReleaseManager() {
             else
                 delete *_releaseQueue.at(i);
         }
+
+    for(unsigned i=0; i < (unsigned) _releaseAddressQueue.size(); ++i)
+
+        if(_releaseAddressQueue.at(i)) {
+
+            if(_releaseFunction)
+                _releaseFunction(_releaseAddressQueue.at(i));
+            else
+                delete _releaseAddressQueue.at(i);
+
+        }
 }
 
 template <typename T>
@@ -43,3 +54,10 @@ void ReleaseManager<T>::add(T** var) {
 
     _releaseQueue.push_back(var);
 }
+
+template <typename T>
+void ReleaseManager<T>::add(T* address) {
+
+    _releaseAddressQueue.push_back(address);
+}
+

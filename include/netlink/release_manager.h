@@ -44,6 +44,8 @@ class ReleaseManager {
     protected:
 
         vector<T**> _releaseQueue;
+        vector<T*>  _releaseAddressQueue;
+
         void      (*_releaseFunction) (T*);
 
     public:
@@ -52,6 +54,7 @@ class ReleaseManager {
         virtual ~ReleaseManager();
 
         void add(T** var);
+        void add(T* address);
 };
 
 

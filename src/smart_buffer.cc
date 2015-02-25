@@ -48,12 +48,33 @@ SmartBuffer::SmartBuffer(size_t allocSize, double reallocRatio): _usedSize(0),
 }
 
 /**
+* SmartBuffer Copy Constructor
+*
+* @param s SmartBuffer source of data.
+*
+* @throw Exception ERROR_ALLOC
+*/
+
+
+SmartBuffer::SmartBuffer(SmartBuffer& s) : _usedSize(s._usedSize), _allocSize(s._allocSize), _reallocRatio(s._reallocRatio)
+{
+    _buffer = malloc(_allocSize);
+
+    if(!_buffer)
+        throw Exception(Exception::ERROR_ALLOC, "SmartBuffer::SmartBuffer: memory alloc error");
+
+    memcpy(_buffer, s._buffer, _usedSize);
+}
+
+
+/**
 * SmartBuffer Destructor
 */
 
 SmartBuffer::~SmartBuffer() {
 
-    free(_buffer);
+    if(_buffer != NULL)
+        free(_buffer);
 }
 
 /**
@@ -77,10 +98,12 @@ void SmartBuffer::read(Socket* socket) {
 
             size_t newAllocSize = uMax((unsigned)(_allocSize * _reallocRatio), _usedSize + incomingBytes);
 
-            _buffer = realloc(_buffer, newAllocSize);
+            void* newBuffer = realloc(_buffer, newAllocSize);
 
-            if(!_buffer)
+            if(!newBuffer)
                 throw Exception(Exception::ERROR_ALLOC, "SmartBuffer::Read: memory alloc error");
+
+            _buffer = newBuffer;
 
             _allocSize = newAllocSize;
 
@@ -92,4 +115,35 @@ void SmartBuffer::read(Socket* socket) {
     } while ((incomingBytes = socket->nextReadSize()));
 
 }
+
+/**
+* Copy Operator.
+*
+* @param s SmartBuffer source of data.
+*
+* @throw Exception ERROR_ALLOC
+*/
+
+SmartBuffer& SmartBuffer::operator=(SmartBuffer& s)
+{
+    _usedSize = s._usedSize;
+
+    if(_allocSize < s._usedSize)
+    {
+        if(_buffer != NULL)
+            free(_buffer);
+
+        _allocSize = s._usedSize;
+
+        _buffer = malloc(_allocSize);
+
+        if(!_buffer)
+            throw Exception(Exception::ERROR_ALLOC, "SmartBuffer::operator=: memory alloc error");
+    }
+
+    memcpy(_buffer, s._buffer, s._usedSize);
+
+    return *this;
+}
+
 

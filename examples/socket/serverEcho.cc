@@ -14,11 +14,13 @@ int main() {
 	cout << "\nStarting server...";
 	cout.flush();
 
+	NL::Socket* clientConnection = NULL;
+
 	try {
 
-		NL::Socket server(5000);
+		NL::Socket server(5000);		
 
-		NL::Socket* clientConnection = server.accept();
+		clientConnection = server.accept();
 
 		char buffer[256];
 		buffer[255] = '\0';
@@ -37,6 +39,9 @@ int main() {
 	catch(NL::Exception e) {
 
 		cout << "\n***Error*** " << e.what();
+		
+		if(clientConnection != NULL)
+			delete clientConnection;
 	}
 
 
