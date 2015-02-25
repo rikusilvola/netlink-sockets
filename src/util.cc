@@ -23,13 +23,13 @@
 #include <netlink/util.h>
 
 
-unsigned NL_NAMESPACE_NAME::getTime() {
+unsigned long long NL_NAMESPACE_NAME::getTime() {
 
     #ifdef OS_WIN32
 
         SYSTEMTIME now;
         GetSystemTime(&now);
-        unsigned milisec = now.wHour *3600*1000 + now.wMinute *60*1000 + now.wSecond *1000 + now.wMilliseconds;
+        unsigned long long milisec = now.wHour *3600*1000 + now.wMinute *60*1000 + now.wSecond *1000 + now.wMilliseconds;
         return(milisec);
 
     #else

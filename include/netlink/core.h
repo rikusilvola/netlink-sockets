@@ -44,7 +44,6 @@
 	#endif
     //#define _WIN32_WINNT 0x0600
 
-
     #include <winsock2.h>
     #include <ws2tcpip.h>
 
@@ -72,6 +71,7 @@
 
 #endif
 
+
 #include <string>
 
 
@@ -91,8 +91,8 @@ void init();
 
 enum Protocol {
 
-    TCP,
-    UDP
+    TCP,	/**< TCP Protocol*/
+    UDP		/**< UDP Protocol*/
 };
 
 
@@ -104,9 +104,9 @@ enum Protocol {
 
 enum IPVer {
 
-    IP4,
-    IP6,
-    ANY
+    IP4,	/**< IP version 4*/
+    IP6,	/**< IP version 6*/
+    ANY		/**< Any IP version*/
 };
 
 

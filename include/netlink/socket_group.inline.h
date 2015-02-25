@@ -21,7 +21,7 @@
 
 #ifdef DOXYGEN
     #include <netlink/socket_group.h>
-    NL_NAMESPACE_USE
+    NL_NAMESPACE
 #endif
 
 
@@ -120,4 +120,8 @@ inline void SocketGroup::setCmdOnDisconnect(SocketGroupCmd* cmd) {
 
     _cmdOnDisconnect = cmd;
 }
+
+#ifdef DOXYGEN
+    NL_NAMESPACE_END
+#endif
 

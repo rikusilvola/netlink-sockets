@@ -38,8 +38,8 @@ NL_NAMESPACE
 	}
 
 
-	static void freeaddrinfo(PADDRINFOA addrInfo) {
-		::freeaddrinfo(addrInfo);
+	static void freeaddrinfo(struct addrinfo* addrInfo) {
+		(void)::freeaddrinfo(addrInfo);
 	}
 
 
@@ -183,7 +183,7 @@ void Socket::initSocket(bool blocking, int nonBlockingConnextionTimeout) {
     int status = getaddrinfo(host, portStr, &conf, &res);
 
     ReleaseManager<struct addrinfo> addrInfoReleaser(freeaddrinfo);
-    addrInfoReleaser.add(&res);
+    addrInfoReleaser.add(res);
 
     if(status != 0) {
 
@@ -458,12 +458,13 @@ Socket* Socket::accept() {
     char hostChar[INET6_ADDRSTRLEN];
     inet_ntop(incoming_addr.ss_family, get_in_addr((struct sockaddr *)&incoming_addr), hostChar, sizeof hostChar);
 
+    int localPort = getLocalPort(new_handler);
 
     Socket* acceptSocket = new Socket();
     acceptSocket->_socketHandler = new_handler;
     acceptSocket->_hostTo = hostChar;
     acceptSocket->_portTo = getInPort((struct sockaddr *)&incoming_addr);
-    acceptSocket->_portFrom = getLocalPort(acceptSocket->_socketHandler);
+    acceptSocket->_portFrom = localPort;
 
     acceptSocket->_protocol = _protocol;
     acceptSocket->_ipVer = _ipVer;

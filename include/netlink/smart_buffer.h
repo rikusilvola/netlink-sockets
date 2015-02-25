@@ -24,6 +24,7 @@
 #define __NL_SMART_BUFFER
 
 #include <stdlib.h>
+#include <string.h>
 
 #include <netlink/core.h>
 #include <netlink/util.h>
@@ -54,6 +55,7 @@ class SmartBuffer {
     public:
 
         SmartBuffer(size_t allocSize = DEFAULT_SMARTBUFFER_SIZE, double reallocRatio = DEFAULT_SMARTBUFFER_REALLOC_RATIO);
+        SmartBuffer(SmartBuffer& s);
         ~SmartBuffer();
 
         const void* operator*() const;
@@ -65,6 +67,8 @@ class SmartBuffer {
         void read(Socket* socket);
 
         void clear();
+
+        SmartBuffer& operator=(SmartBuffer& s);
 };
 
 #include <netlink/smart_buffer.inline.h>

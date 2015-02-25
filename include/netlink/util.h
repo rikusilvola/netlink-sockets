@@ -29,7 +29,7 @@ NL_NAMESPACE
     int iMax(int a, int b);
     unsigned uMax(unsigned a, unsigned b);
 
-    unsigned getTime();
+    unsigned long long getTime();
 
 NL_NAMESPACE_END
 
